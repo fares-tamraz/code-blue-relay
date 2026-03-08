@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
+import { RelayStoreProvider } from "@/components/relay/relay-store-provider"
+
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -16,7 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body>{children}</body>
+      <body>
+        <RelayStoreProvider>{children}</RelayStoreProvider>
+      </body>
     </html>
   )
 }

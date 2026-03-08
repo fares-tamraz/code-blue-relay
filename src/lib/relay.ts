@@ -1,9 +1,41 @@
-import type { Case, CaseStatus, SignalTone } from "@/types/relay"
+import { normalizeStructuredMemory } from "@/lib/ai/relay-schema"
+import type {
+  Case,
+  CaseSignal,
+  CaseStatus,
+  DashboardMetrics,
+  RelayDraftInput,
+  RelayRecord,
+  RelayStatus,
+  SignalTone,
+  StructuredMemory,
+  TimelineEvent,
+} from "@/types/relay"
 
 type StatusMeta = {
   label: CaseStatus
   chipClassName: string
   surfaceClassName: string
+}
+
+type CreateRelayOptions = {
+  transcript: string
+  structuredMemory: StructuredMemory
+  source?: RelayRecord["source"]
+  createdAt?: string
+  id?: string
+  slug?: string
+  handoffMode?: RelayRecord["handoffMode"]
+  handoffLabel?: string
+  clinicianLabel?: string
+  unit?: string
+  room?: string
+  age?: number
+  diagnosis?: string
+  story?: string
+  timeline?: TimelineEvent[]
+  audioSummary?: RelayRecord["audioSummary"]
+  escalationActionText?: string
 }
 
 export const statusMeta: Record<CaseStatus, StatusMeta> = {
@@ -60,73 +92,360 @@ export function getStatusMeta(status: CaseStatus) {
   return statusMeta[status]
 }
 
-export function parseDurationLabel(durationLabel: string) {
-  const [minutes, seconds] = durationLabel.split(":").map(Number)
+export function parseDurationLabel(durationLabel?: string) {
+  if (!durationLabel) {
+    return 0
+  }
+
+  const [minutes = 0, seconds = 0] = durationLabel.split(":").map(Number)
   return minutes * 60 + seconds
 }
 
-export function simulateUrgentCaseUpdate(caseData: Case): Case {
-  if (caseData.status === "Escalate") {
-    return caseData
+export function formatDurationLabelFromScript(script: string) {
+  const wordCount = script.trim().split(/\s+/).filter(Boolean).length
+  const durationInSeconds = Math.max(Math.round((wordCount / 150) * 60), 10)
+  const minutes = Math.floor(durationInSeconds / 60)
+  const seconds = durationInSeconds % 60
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+export function slugify(value: string) {
+  const sanitizedValue = value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+
+  return sanitizedValue || "relay"
+}
+
+function dedupe(items: string[]) {
+  return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)))
+}
+
+function buildOneLineSummary(
+  structuredMemory: StructuredMemory,
+  transcript: string
+) {
+  if (structuredMemory.oneLineSummary) {
+    return structuredMemory.oneLineSummary
   }
 
-  const updatedUnresolvedItems = [
-    "Prepare immediate physician escalation for respiratory decline.",
-    ...caseData.structuredMemory.unresolvedItems,
+  const firstSentence = transcript.split(/(?<=[.!?])\s+/)[0]?.trim() ?? ""
+
+  if (!firstSentence) {
+    return "Structured relay created from the current handoff."
+  }
+
+  const words = firstSentence.split(/\s+/).filter(Boolean)
+  return words.length > 22 ? `${words.slice(0, 22).join(" ")}.` : firstSentence
+}
+
+function buildAudioSummaryScript(
+  structuredMemory: StructuredMemory,
+  patientLabel: string,
+  oneLineSummary: string
+) {
+  if (structuredMemory.audioSummaryScript) {
+    return structuredMemory.audioSummaryScript
+  }
+
+  const script = [
+    patientLabel ? `${patientLabel}.` : "",
+    oneLineSummary,
+    structuredMemory.newFindings[0] ?? "",
+    structuredMemory.unresolvedItems[0] ?? "",
+    structuredMemory.escalationTriggers[0] ?? "",
   ]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+
+  return script
+}
+
+export function createRelayFromStructuredMemory({
+  transcript,
+  structuredMemory,
+  source = "generated",
+  createdAt = new Date().toISOString(),
+  id = crypto.randomUUID(),
+  slug,
+  handoffMode = "typed",
+  handoffLabel = "Clinical relay",
+  clinicianLabel = source === "seeded" ? "Outgoing clinician" : "New relay draft",
+  unit,
+  room,
+  age,
+  diagnosis,
+  story,
+  timeline,
+  audioSummary,
+  escalationActionText,
+}: CreateRelayOptions): RelayRecord {
+  const normalizedMemory = normalizeStructuredMemory(structuredMemory)
+  const patientLabel = normalizedMemory.patientName
+  const oneLineSummary = buildOneLineSummary(normalizedMemory, transcript)
+  const audioSummaryScript = buildAudioSummaryScript(
+    normalizedMemory,
+    patientLabel,
+    oneLineSummary
+  )
+  const relaySlug =
+    slug ??
+    `${slugify(patientLabel || "relay")}-${id.slice(0, 8).toLowerCase()}`
 
   return {
-    ...caseData,
-    status: "Escalate",
-    statusNote:
-      "Breathing worsened overnight. Immediate escalation is now active.",
-    lastUpdated: "2026-03-08T00:43:00-05:00",
-    unresolvedCount: updatedUnresolvedItems.length,
-    whatChanged: [
-      "Breathing effort increased during the latest overnight reassessment.",
-      ...caseData.whatChanged,
-    ],
+    id,
+    slug: relaySlug,
+    patientName: patientLabel,
+    status: normalizedMemory.currentStatus,
+    oneLineSummary,
     structuredMemory: {
-      ...caseData.structuredMemory,
-      summary:
-        "Case has moved from watch to escalation after overnight breathing decline.",
-      newFindings: [
-        "Work of breathing increased during the urgent overnight check.",
-        ...caseData.structuredMemory.newFindings,
-      ],
-      unresolvedItems: updatedUnresolvedItems,
-      followUpNeeded: [
-        "Stay at bedside until physician plan is confirmed.",
-        ...caseData.structuredMemory.followUpNeeded,
-      ],
+      ...normalizedMemory,
+      oneLineSummary,
+      audioSummaryScript,
     },
+    unresolvedCount: normalizedMemory.unresolvedItems.length,
+    carriedForwardCount: normalizedMemory.carriedForward.length,
+    audioSummary:
+      audioSummary ??
+      (source === "seeded"
+        ? {
+            status: "ready",
+            script: audioSummaryScript,
+            provider: "fallback",
+            durationLabel: formatDurationLabelFromScript(audioSummaryScript),
+            lastGeneratedAt: createdAt,
+          }
+        : {
+            status: "generating",
+            script: audioSummaryScript,
+            provider: "pending",
+            durationLabel: formatDurationLabelFromScript(audioSummaryScript),
+          }),
+    createdAt,
+    updatedAt: createdAt,
+    transcript,
+    handoffLabel,
+    clinicianLabel,
+    handoffMode,
+    unit,
+    room,
+    age,
+    diagnosis,
+    story,
+    carriedForwardLabel: "Carried forward from previous shift",
+    escalationActionText,
+    timeline:
+      timeline ??
+      [
+        {
+          id: `${relaySlug}-captured`,
+          timestamp: createdAt,
+          title: "Relay created",
+          description:
+            source === "seeded"
+              ? "Seeded relay loaded into the active caseboard."
+              : "Structured memory was converted into a new active relay.",
+          actor: "Relay store",
+          tone: "handoff",
+        },
+      ],
+    source,
+  }
+}
+
+export function getRelayDisplayName(relay: RelayRecord) {
+  return relay.patientName || "Unnamed patient"
+}
+
+export function getRelayDisplayLine(relay: RelayRecord) {
+  return [relay.diagnosis, relay.room ? `Room ${relay.room}` : "", relay.unit]
+    .filter(Boolean)
+    .join(" | ")
+}
+
+export function getRelayStory(relay: RelayRecord) {
+  return relay.story || relay.oneLineSummary || "Structured relay is ready."
+}
+
+export function getRelayWhatChanged(relay: RelayRecord) {
+  return relay.structuredMemory.newFindings.length
+    ? relay.structuredMemory.newFindings
+    : ["No new findings were extracted from this handoff."]
+}
+
+export function getRelayCarriedForwardNote(relay: RelayRecord) {
+  return (
+    relay.structuredMemory.carriedForward[0] ||
+    "No carried-forward items were explicitly captured in this relay."
+  )
+}
+
+export function getRelayStatusNote(relay: RelayRecord) {
+  if (relay.status === "Escalate") {
+    return (
+      relay.structuredMemory.escalationTriggers[0] ||
+      "Immediate escalation is active for this relay."
+    )
+  }
+
+  if (relay.status === "Watch") {
+    return relay.unresolvedCount
+      ? `${relay.unresolvedCount} unresolved item${relay.unresolvedCount === 1 ? "" : "s"} remain under active watch.`
+      : "This relay is on watch for continued follow-up."
+  }
+
+  return relay.unresolvedCount
+    ? `${relay.unresolvedCount} follow-up item${relay.unresolvedCount === 1 ? "" : "s"} remain, but the relay is stable.`
+    : "The relay is stable and ready for the next shift."
+}
+
+export function getRelaySignals(relay: RelayRecord): CaseSignal[] {
+  return [
+    {
+      label: "Voice signal",
+      value:
+        relay.structuredMemory.visualSignals.voiceSignal ||
+        "No voice signal extracted yet",
+      tone: "teal",
+    },
+    {
+      label: "Memory continuity",
+      value:
+        relay.structuredMemory.visualSignals.memoryContinuity ||
+        "No carried-forward state captured",
+      tone: "violet",
+    },
+    {
+      label: "Escalation logic",
+      value:
+        relay.structuredMemory.visualSignals.escalationLogic ||
+        "No explicit escalation trigger extracted",
+      tone: relay.status === "Escalate" ? "coral" : "amber",
+    },
+  ]
+}
+
+export function getRelayEscalationRule(relay: RelayRecord) {
+  return {
+    title: relay.status === "Escalate" ? "Escalation active" : "Escalation logic armed",
+    condition:
+      relay.structuredMemory.escalationTriggers[0] ||
+      "No explicit escalation trigger was captured from this handoff.",
+    action:
+      relay.escalationActionText ||
+      "Notify the covering clinician and preserve the updated status in the relay.",
+  }
+}
+
+export function buildDashboardMetrics(relays: RelayRecord[]): DashboardMetrics {
+  const watchOrEscalateCount = relays.filter(
+    (relay) => relay.status !== "Stable"
+  ).length
+  const voiceReadyCount = relays.filter(
+    (relay) => relay.audioSummary?.status === "ready"
+  ).length
+
+  return {
+    activeRelayCount: relays.length,
+    watchOrEscalateCount,
+    voiceReadyCount,
+    shiftConfidence:
+      relays.some((relay) => relay.status === "Escalate")
+        ? "Guarded"
+        : watchOrEscalateCount
+          ? "Focused"
+          : "High",
+  }
+}
+
+export function simulateUrgentRelayUpdate(relay: RelayRecord): RelayRecord {
+  if (relay.status === "Escalate") {
+    return relay
+  }
+
+  const now = new Date().toISOString()
+  const urgentFinding =
+    relay.status === "Watch"
+      ? "Condition worsened during active watch and the relay moved into escalation."
+      : "An urgent change was logged and the relay moved into escalation."
+  const escalationTrigger =
+    relay.structuredMemory.escalationTriggers[0] ||
+    "Escalate immediately for the new urgent change."
+  const updatedStructuredMemory = {
+    ...relay.structuredMemory,
+    currentStatus: "Escalate" as RelayStatus,
+    oneLineSummary: `${relay.oneLineSummary} Status has now escalated.`,
+    newFindings: dedupe([urgentFinding, ...relay.structuredMemory.newFindings]),
+    unresolvedItems: dedupe([
+      "Immediate clinician review is required.",
+      ...relay.structuredMemory.unresolvedItems,
+    ]),
+    escalationTriggers: dedupe([escalationTrigger, ...relay.structuredMemory.escalationTriggers]),
+    followUpNeeded: dedupe([
+      "Document the urgent change and confirm the escalation plan.",
+      ...relay.structuredMemory.followUpNeeded,
+    ]),
+    audioSummaryScript: [
+      getRelayDisplayName(relay),
+      "has escalated.",
+      urgentFinding,
+      escalationTrigger,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    visualSignals: {
+      ...relay.structuredMemory.visualSignals,
+      escalationLogic: escalationTrigger,
+      clinicalMemoryResolvesInRealTime: urgentFinding,
+    },
+  }
+
+  return {
+    ...relay,
+    status: "Escalate",
+    oneLineSummary: updatedStructuredMemory.oneLineSummary,
+    structuredMemory: updatedStructuredMemory,
+    unresolvedCount: updatedStructuredMemory.unresolvedItems.length,
+    updatedAt: now,
+    audioSummary: relay.audioSummary
+      ? {
+          ...relay.audioSummary,
+          status: "generating",
+          audioUrl: undefined,
+          script: updatedStructuredMemory.audioSummaryScript,
+          provider: "pending",
+          durationLabel: formatDurationLabelFromScript(
+            updatedStructuredMemory.audioSummaryScript
+          ),
+          errorMessage: undefined,
+        }
+      : undefined,
     timeline: [
       {
-        id: `${caseData.id}-urgent-update`,
-        timestamp: "2026-03-08T00:43:00-05:00",
-        title: "Urgent overnight update",
+        id: `${relay.slug}-urgent-update-${now}`,
+        timestamp: now,
+        title: "Urgent update recorded",
         description:
-          "Breathing worsened and the case crossed the escalation threshold.",
+          "The relay status changed to Escalate and the dashboard should refresh immediately.",
         actor: "Incoming nurse",
         tone: "escalation",
       },
-      ...caseData.timeline,
+      ...relay.timeline,
     ],
-    liveSignals: [
-      {
-        label: "Escalation active",
-        value: "Breathing worsened",
-        tone: "coral",
-      },
-      ...caseData.liveSignals.filter(
-        (signal) => signal.label !== "Respiratory watch"
-      ),
-    ],
-    audioSummary: {
-      ...caseData.audioSummary,
-      transcript:
-        "Elina Moreau has escalated. Breathing worsened overnight on top of confusion above baseline, low intake, and the earlier wet cough after medications. Physician escalation should happen immediately.",
-      lastGeneratedAt: "2026-03-08T00:43:00-05:00",
-    },
   }
+}
+
+export function createRelayDraftInput(transcript: string): RelayDraftInput {
+  return {
+    transcript: transcript.trim(),
+  }
+}
+
+export function asCase(relay: RelayRecord): Case {
+  return relay
 }

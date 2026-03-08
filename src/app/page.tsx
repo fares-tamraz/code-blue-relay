@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { primaryDemoCase } from "@/data/demo-cases"
+import { primarySeedRelay } from "@/data/demo-cases"
 
 import { LiveCasePreview } from "@/components/relay/live-case-preview"
 import { MemoryStrands } from "@/components/relay/memory-strands"
@@ -41,7 +41,7 @@ const workflowSteps = [
     step: "01",
     title: "Capture the handoff as spoken",
     body:
-      "Voice-first relay keeps the outgoing nurse’s narrative intact, including tone, uncertainty, and what still feels clinically off.",
+      "Voice-first relay keeps the outgoing nurse's narrative intact, including tone, uncertainty, and what still feels clinically off.",
   },
   {
     step: "02",
@@ -81,7 +81,7 @@ export default function Home() {
             </Link>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full border border-[rgba(45,211,191,0.18)] bg-[rgba(17,56,64,0.3)] px-3 py-1 font-semibold uppercase tracking-[0.22em] text-[rgba(153,247,236,0.92)]">
-                Hackathon MVP
+                HACK CANADA
               </span>
               <Link
                 href="/dashboard"
@@ -104,7 +104,7 @@ export default function Home() {
                 Midnight clinical intelligence
               </div>
               <h1 className="mt-8 max-w-4xl font-display text-5xl leading-[0.94] font-semibold tracking-[-0.06em] text-white md:text-7xl">
-                When shift changes, critical context shouldn’t.
+                When shift changes, critical context shouldn&apos;t.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-[rgba(199,210,229,0.82)]">
                 Code Blue Relay transforms spoken handoff into persistent clinical
@@ -117,7 +117,7 @@ export default function Home() {
                   size="lg"
                   className="h-12 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-6 text-[rgba(4,19,28,0.94)] hover:brightness-105"
                 >
-                  <Link href={`/case/${primaryDemoCase.id}#audio-summary`}>
+                  <Link href={`/case/${primarySeedRelay.slug}#audio-summary`}>
                     Watch 30s Handoff
                     <AudioLines className="size-4" />
                   </Link>
@@ -128,7 +128,7 @@ export default function Home() {
                   size="lg"
                   className="h-12 rounded-full border-white/12 bg-white/5 px-6 text-white hover:bg-white/8"
                 >
-                  <Link href={`/case/${primaryDemoCase.id}`}>
+                  <Link href={`/case/${primarySeedRelay.slug}`}>
                     Open Live Case
                     <ArrowRight className="size-4" />
                   </Link>
@@ -164,7 +164,7 @@ export default function Home() {
             </div>
 
             <div className="relative z-10">
-              <LiveCasePreview caseData={primaryDemoCase} />
+              <LiveCasePreview caseData={primarySeedRelay} />
             </div>
           </div>
         </div>

@@ -6,7 +6,14 @@ import { ArrowRight, AudioLines, Clock3, CornerDownRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatClinicalTime, toneClassMap } from "@/lib/relay"
+import {
+  formatClinicalTime,
+  getRelayDisplayName,
+  getRelaySignals,
+  getRelayStory,
+  getRelayWhatChanged,
+  toneClassMap,
+} from "@/lib/relay"
 import type { Case } from "@/types/relay"
 
 import { StatusBadge } from "./status-badge"
@@ -16,6 +23,16 @@ type LiveCasePreviewProps = {
 }
 
 export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
+  const relaySignals = getRelaySignals(caseData)
+  const relayWhatChanged = getRelayWhatChanged(caseData)
+  const subtitle = [
+    caseData.age ? `${caseData.age}` : "",
+    caseData.unit || "",
+    caseData.room ? `Room ${caseData.room}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ")
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 28 }}
@@ -30,11 +47,13 @@ export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
                 Live case preview
               </p>
               <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">
-                {caseData.patientName}
+                {getRelayDisplayName(caseData)}
               </h3>
-              <p className="mt-1 text-sm text-[rgba(186,198,223,0.76)]">
-                {caseData.age} • {caseData.unit} • Room {caseData.room}
-              </p>
+              {subtitle ? (
+                <p className="mt-1 text-sm text-[rgba(186,198,223,0.76)]">
+                  {subtitle}
+                </p>
+              ) : null}
             </div>
             <StatusBadge status={caseData.status} />
           </div>
@@ -42,11 +61,11 @@ export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
 
         <CardContent className="space-y-6 px-6 py-6">
           <p className="max-w-xl text-sm leading-7 text-[rgba(202,213,233,0.82)]">
-            {caseData.story}
+            {getRelayStory(caseData)}
           </p>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {caseData.liveSignals.map((signal) => (
+            {relaySignals.map((signal) => (
               <div
                 key={signal.label}
                 className={`rounded-2xl border px-4 py-3 ${toneClassMap[signal.tone]}`}
@@ -69,11 +88,11 @@ export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
               </div>
               <div className="flex items-center gap-2 text-xs text-[rgba(186,198,223,0.72)]">
                 <Clock3 className="size-3.5" />
-                {formatClinicalTime(caseData.lastUpdated)}
+                {formatClinicalTime(caseData.updatedAt)}
               </div>
             </div>
             <ul className="space-y-2 text-sm leading-6 text-[rgba(220,228,243,0.88)]">
-              {caseData.whatChanged.slice(0, 2).map((item) => (
+              {relayWhatChanged.slice(0, 2).map((item) => (
                 <li key={item} className="flex gap-3">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[rgba(124,241,232,0.9)]" />
                   <span>{item}</span>
@@ -88,7 +107,7 @@ export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
               size="lg"
               className="h-11 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-5 text-[rgba(4,19,28,0.94)] hover:brightness-105"
             >
-              <Link href={`/case/${caseData.id}`}>
+              <Link href={`/case/${caseData.slug}`}>
                 Open live case
                 <ArrowRight className="size-4" />
               </Link>
@@ -99,7 +118,7 @@ export function LiveCasePreview({ caseData }: LiveCasePreviewProps) {
               size="lg"
               className="h-11 rounded-full border-white/12 bg-white/5 px-5 text-white hover:bg-white/8"
             >
-              <Link href={`/case/${caseData.id}#audio-summary`}>
+              <Link href={`/case/${caseData.slug}#audio-summary`}>
                 <AudioLines className="size-4" />
                 Play relay summary
               </Link>

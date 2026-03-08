@@ -1,71 +1,172 @@
 "use client"
 
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { AudioLines, Pause, Play, RadioTower } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { parseDurationLabel } from "@/lib/relay"
-import type { AudioSummary } from "@/types/relay"
+import { formatDurationLabelFromScript, parseDurationLabel } from "@/lib/relay"
+import type { Case } from "@/types/relay"
+
+import { useRelayStore } from "./relay-store-provider"
 
 type AudioSummaryCardProps = {
-  audioSummary: AudioSummary
+  relay: Case
 }
 
 const waveformBars = [24, 40, 18, 34, 28, 42, 20, 38, 26, 34, 16, 30]
 
-export function AudioSummaryCard({ audioSummary }: AudioSummaryCardProps) {
+export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
+  const { ensureRelayAudio } = useRelayStore()
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isRequestingAudio, setIsRequestingAudio] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [pendingAutoplay, setPendingAutoplay] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const durationSeconds = Math.max(parseDurationLabel(audioSummary.durationLabel), 1)
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const fallbackIntervalRef = useRef<number | null>(null)
+  const audioSummary = relay.audioSummary
 
-  const advanceMockPlayback = useEffectEvent(() => {
-    setProgress((value) => {
-      const nextValue = value + 100 / durationSeconds / 3
+  const durationLabel =
+    audioSummary?.durationLabel ??
+    formatDurationLabelFromScript(audioSummary?.script ?? relay.oneLineSummary)
+  const durationSeconds = Math.max(parseDurationLabel(durationLabel), 1)
 
-      if (nextValue >= 100) {
-        setIsPlaying(false)
-        return 100
-      }
+  function clearFallbackInterval() {
+    if (fallbackIntervalRef.current) {
+      window.clearInterval(fallbackIntervalRef.current)
+      fallbackIntervalRef.current = null
+    }
+  }
 
-      return nextValue
-    })
-  })
+  function stopSpeechFallback() {
+    clearFallbackInterval()
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel()
+    }
+
+    utteranceRef.current = null
+  }
+
+  function stopPlayback() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
+
+    stopSpeechFallback()
+    setIsPlaying(false)
+  }
 
   useEffect(() => {
-    if (!isPlaying || audioSummary.audioUrl) {
+    if (!pendingAutoplay || !audioSummary?.audioUrl || !audioRef.current) {
       return
     }
 
-    const interval = window.setInterval(() => {
-      advanceMockPlayback()
-    }, 320)
+    void audioRef.current
+      .play()
+      .then(() => {
+        setIsPlaying(true)
+        setPendingAutoplay(false)
+      })
+      .catch(() => {
+        setPendingAutoplay(false)
+      })
+  }, [audioSummary?.audioUrl, pendingAutoplay])
+
+  useEffect(() => {
+    const audioElement = audioRef.current
 
     return () => {
-      window.clearInterval(interval)
-    }
-  }, [audioSummary.audioUrl, isPlaying])
-
-  function togglePlayback() {
-    if (audioSummary.audioUrl && audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause()
-        setIsPlaying(false)
-        return
+      if (audioElement) {
+        audioElement.pause()
       }
 
+      clearFallbackInterval()
+
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  function startSpeechFallback() {
+    if (!audioSummary?.script) {
+      return
+    }
+
+    if (!("speechSynthesis" in window)) {
+      setProgress(100)
+      return
+    }
+
+    stopSpeechFallback()
+    setProgress(0)
+    setIsPlaying(true)
+
+    const utterance = new SpeechSynthesisUtterance(audioSummary.script)
+    utterance.rate = 0.98
+    utterance.onend = () => {
+      clearFallbackInterval()
+      setIsPlaying(false)
+      setProgress(100)
+    }
+    utterance.onerror = () => {
+      clearFallbackInterval()
+      setIsPlaying(false)
+    }
+
+    utteranceRef.current = utterance
+    window.speechSynthesis.speak(utterance)
+
+    fallbackIntervalRef.current = window.setInterval(() => {
+      setProgress((value) => {
+        const nextValue = value + 100 / durationSeconds / 3
+        return nextValue >= 100 ? 100 : nextValue
+      })
+    }, 320)
+  }
+
+  async function handlePlay() {
+    if (!audioSummary) {
+      return
+    }
+
+    if (isPlaying) {
+      stopPlayback()
+      return
+    }
+
+    if (audioSummary.audioUrl && audioRef.current) {
+      setProgress(0)
+      audioRef.current.currentTime = 0
       void audioRef.current.play()
       setIsPlaying(true)
       return
     }
 
-    if (progress >= 100) {
-      setProgress(0)
-    }
+    setIsRequestingAudio(true)
 
-    setIsPlaying((value) => !value)
+    try {
+      const updatedAudioSummary = await ensureRelayAudio(relay.slug)
+
+      if (updatedAudioSummary?.audioUrl) {
+        setPendingAutoplay(true)
+        return
+      }
+
+      startSpeechFallback()
+    } finally {
+      setIsRequestingAudio(false)
+    }
   }
+
+  const providerLabel =
+    audioSummary?.status === "generating" || isRequestingAudio
+      ? "Generating audio"
+      : audioSummary?.provider === "elevenlabs"
+        ? "ElevenLabs live"
+        : "Relay-specific fallback"
 
   return (
     <div
@@ -81,9 +182,7 @@ export function AudioSummaryCard({ audioSummary }: AudioSummaryCardProps) {
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/78">
               <RadioTower className="size-3.5" />
-              {audioSummary.provider === "elevenlabs"
-                ? "ElevenLabs live"
-                : "Mock audio-ready"}
+              {providerLabel}
             </div>
           </div>
 
@@ -92,18 +191,20 @@ export function AudioSummaryCard({ audioSummary }: AudioSummaryCardProps) {
               Relay spoken summary
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-[rgba(205,214,231,0.84)]">
-              {audioSummary.transcript}
+              {audioSummary?.script || relay.oneLineSummary}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-[rgba(186,198,223,0.72)]">
-            <span>{audioSummary.voiceName}</span>
+            <span>{audioSummary?.voiceName || "Clinical Night Voice"}</span>
             <span className="h-1 w-1 rounded-full bg-white/30" />
-            <span>{audioSummary.durationLabel}</span>
+            <span>{durationLabel}</span>
             <span className="h-1 w-1 rounded-full bg-white/30" />
             <span>
               Updated{" "}
-              {new Date(audioSummary.lastGeneratedAt).toLocaleTimeString("en-US", {
+              {new Date(
+                audioSummary?.lastGeneratedAt || relay.updatedAt
+              ).toLocaleTimeString("en-US", {
                 hour: "numeric",
                 minute: "2-digit",
               })}
@@ -140,11 +241,17 @@ export function AudioSummaryCard({ audioSummary }: AudioSummaryCardProps) {
 
           <div className="flex items-center justify-between gap-4">
             <Button
-              onClick={togglePlayback}
+              onClick={handlePlay}
               size="lg"
-              className="h-11 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-5 text-[rgba(4,19,28,0.94)] hover:brightness-105"
+              disabled={!audioSummary?.script || audioSummary?.status === "generating"}
+              className="h-11 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-5 text-[rgba(4,19,28,0.94)] hover:brightness-105 disabled:opacity-60"
             >
-              {isPlaying ? (
+              {isRequestingAudio || audioSummary?.status === "generating" ? (
+                <>
+                  <AudioLines className="size-4 animate-pulse" />
+                  Generating Audio
+                </>
+              ) : isPlaying ? (
                 <>
                   <Pause className="size-4" />
                   Pause Summary
@@ -166,7 +273,7 @@ export function AudioSummaryCard({ audioSummary }: AudioSummaryCardProps) {
         </div>
       </div>
 
-      {audioSummary.audioUrl ? (
+      {audioSummary?.audioUrl ? (
         <audio
           ref={audioRef}
           src={audioSummary.audioUrl}

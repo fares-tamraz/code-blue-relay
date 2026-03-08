@@ -1,10 +1,14 @@
 import { AlertTriangle, Siren } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import type { CaseStatus, EscalationRule } from "@/types/relay"
+import type { CaseStatus } from "@/types/relay"
 
 type EscalationBannerProps = {
-  rule: EscalationRule
+  rule: {
+    title: string
+    condition: string
+    action: string
+  }
   status: CaseStatus
   className?: string
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { startTransition, useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import {
@@ -11,25 +12,34 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { formatClinicalStamp, toneClassMap } from "@/lib/relay"
-import { simulateUrgentCaseUpdate } from "@/lib/relay"
-import type { Case } from "@/types/relay"
+import {
+  formatClinicalStamp,
+  getRelayCarriedForwardNote,
+  getRelayDisplayName,
+  getRelayEscalationRule,
+  getRelaySignals,
+  getRelayStatusNote,
+  getRelayStory,
+  getRelayWhatChanged,
+  toneClassMap,
+} from "@/lib/relay"
 
 import { AudioSummaryCard } from "./audio-summary-card"
 import { EscalationBanner } from "./escalation-banner"
 import { RelayPanel } from "./relay-panel"
 import { StatusBadge } from "./status-badge"
 import { Timeline } from "./timeline"
+import { useRelayStore } from "./relay-store-provider"
 
 type CaseDetailClientProps = {
-  initialCase: Case
+  relaySlug: string
 }
 
-export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
-  const [caseData, setCaseData] = useState(initialCase)
-  const [hasUrgentUpdate, setHasUrgentUpdate] = useState(false)
+export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
+  const { getRelayBySlug, escalateRelay } = useRelayStore()
   const [isUpdating, setIsUpdating] = useState(false)
   const updateTimerRef = useRef<number | null>(null)
+  const relay = getRelayBySlug(relaySlug)
 
   useEffect(() => {
     return () => {
@@ -39,8 +49,34 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
     }
   }, [])
 
+  if (!relay) {
+    return (
+      <div className="rounded-[32px] border border-white/10 bg-[rgba(9,17,30,0.78)] p-8 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[rgba(153,167,193,0.74)]">
+          Relay not found
+        </p>
+        <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
+          This relay is not present in the active client store.
+        </h2>
+        <p className="mt-4 text-sm leading-7 text-[rgba(186,198,223,0.78)]">
+          If this was a newly created relay, return to the dashboard in the same
+          session to reopen it from the live caseboard.
+        </p>
+        <Button
+          asChild
+          size="lg"
+          className="mt-8 h-11 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-6 text-[rgba(4,19,28,0.94)] hover:brightness-105"
+        >
+          <Link href="/dashboard">Back to Dashboard</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const currentRelay = relay
+
   function handleUrgentUpdate() {
-    if (hasUrgentUpdate || isUpdating) {
+    if (currentRelay.status === "Escalate" || isUpdating) {
       return
     }
 
@@ -48,12 +84,15 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
 
     updateTimerRef.current = window.setTimeout(() => {
       startTransition(() => {
-        setCaseData((currentCase) => simulateUrgentCaseUpdate(currentCase))
-        setHasUrgentUpdate(true)
+        escalateRelay(relaySlug)
         setIsUpdating(false)
       })
     }, 450)
   }
+
+  const relaySignals = getRelaySignals(currentRelay)
+  const relayWhatChanged = getRelayWhatChanged(currentRelay)
+  const escalationRule = getRelayEscalationRule(currentRelay)
 
   return (
     <div className="space-y-6">
@@ -62,9 +101,10 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
         animate={{
           opacity: 1,
           y: 0,
-          boxShadow: hasUrgentUpdate
-            ? "0 0 0 1px rgba(251,113,133,0.22), 0 30px 120px rgba(113,19,46,0.5)"
-            : "0 30px 120px rgba(2,6,23,0.38)",
+          boxShadow:
+            currentRelay.status === "Escalate"
+              ? "0 0 0 1px rgba(251,113,133,0.22), 0 30px 120px rgba(113,19,46,0.5)"
+              : "0 30px 120px rgba(2,6,23,0.38)",
         }}
         transition={{ duration: 0.45, ease: "easeOut" }}
         className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,17,30,0.82),rgba(7,13,24,0.92))] px-6 py-6 backdrop-blur-xl md:px-8"
@@ -73,26 +113,30 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl space-y-4">
               <div className="flex flex-wrap items-center gap-3">
-                <StatusBadge status={caseData.status} />
-                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/78">
-                  {caseData.unit}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/78">
-                  Room {caseData.room}
-                </span>
+                <StatusBadge status={currentRelay.status} />
+                {currentRelay.unit ? (
+                  <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/78">
+                    {currentRelay.unit}
+                  </span>
+                ) : null}
+                {currentRelay.room ? (
+                  <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/78">
+                    Room {currentRelay.room}
+                  </span>
+                ) : null}
               </div>
 
               <div>
                 <h2 className="text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">
-                  {caseData.patientName}
+                  {getRelayDisplayName(currentRelay)}
                 </h2>
                 <p className="mt-3 max-w-2xl text-base leading-8 text-[rgba(199,210,229,0.84)]">
-                  {caseData.story}
+                  {getRelayStory(currentRelay)}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                {caseData.liveSignals.map((signal) => (
+                {relaySignals.map((signal) => (
                   <div
                     key={signal.label}
                     className={`rounded-full border px-4 py-2 text-sm ${toneClassMap[signal.tone]}`}
@@ -100,7 +144,7 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
                     <span className="font-semibold text-white/95">
                       {signal.label}
                     </span>
-                    <span className="mx-2 opacity-50">•</span>
+                    <span className="mx-2 opacity-50">|</span>
                     <span>{signal.value}</span>
                   </div>
                 ))}
@@ -114,7 +158,7 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
                     Live status
                   </p>
                   <p className="mt-2 text-lg font-semibold text-white">
-                    {caseData.statusNote}
+                    {getRelayStatusNote(currentRelay)}
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -124,7 +168,7 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
                       Last update
                     </div>
                     <p className="mt-2 text-sm text-white/90">
-                      {formatClinicalStamp(caseData.lastUpdated)}
+                      {formatClinicalStamp(currentRelay.updatedAt)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
@@ -133,20 +177,20 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
                       Unresolved
                     </div>
                     <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                      {caseData.unresolvedCount}
+                      {currentRelay.unresolvedCount}
                     </p>
                   </div>
                 </div>
                 <Button
                   size="lg"
                   onClick={handleUrgentUpdate}
-                  disabled={hasUrgentUpdate || isUpdating}
+                  disabled={currentRelay.status === "Escalate" || isUpdating}
                   className="h-11 w-full rounded-full bg-[linear-gradient(135deg,rgba(251,113,133,1),rgba(255,190,200,0.9))] text-[rgba(36,8,14,0.95)] hover:brightness-105"
                 >
-                  {hasUrgentUpdate ? (
+                  {currentRelay.status === "Escalate" ? (
                     <>
                       <ShieldAlert className="size-4" />
-                      Escalation triggered
+                      Escalation active
                     </>
                   ) : isUpdating ? (
                     <>
@@ -164,30 +208,32 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
             </div>
           </div>
 
-          <EscalationBanner rule={caseData.escalationRule} status={caseData.status} />
+          <EscalationBanner rule={escalationRule} status={currentRelay.status} />
         </div>
       </motion.section>
 
-      <AudioSummaryCard audioSummary={caseData.audioSummary} />
+      <AudioSummaryCard relay={currentRelay} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <RelayPanel
           title="Spoken Handoff"
-          eyebrow={caseData.handoff.shiftLabel}
+          eyebrow={currentRelay.handoffLabel}
           tone="teal"
         >
           <div className="space-y-4">
             <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm font-medium text-white">
-                  {caseData.handoff.clinician}
+                  {currentRelay.clinicianLabel}
                 </div>
                 <div className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/72">
-                  {caseData.handoff.mode === "voice" ? "Voice capture" : "Typed relay"}
+                  {currentRelay.handoffMode === "voice"
+                    ? "Voice capture"
+                    : "Typed relay"}
                 </div>
               </div>
               <p className="mt-4 text-sm leading-7 text-[rgba(212,221,237,0.84)]">
-                {caseData.handoff.transcript}
+                {currentRelay.transcript}
               </p>
             </div>
           </div>
@@ -198,16 +244,17 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
           eyebrow="Persistent continuity layer"
           tone="violet"
           items={[
-            caseData.structuredMemory.summary,
-            ...caseData.structuredMemory.carriedForward,
-          ]}
+            currentRelay.structuredMemory.oneLineSummary,
+            currentRelay.structuredMemory.visualSignals
+              .clinicalMemoryResolvesInRealTime,
+          ].filter(Boolean)}
         />
 
         <RelayPanel
           title="What Changed"
           eyebrow="Shift delta"
           tone="teal"
-          items={caseData.whatChanged}
+          items={relayWhatChanged}
         />
 
         <RelayPanel
@@ -215,35 +262,35 @@ export function CaseDetailClient({ initialCase }: CaseDetailClientProps) {
           eyebrow="Carried forward from previous shift"
           tone="violet"
           items={[
-            caseData.carriedForwardNote,
-            ...caseData.structuredMemory.carriedForward,
-          ]}
+            getRelayCarriedForwardNote(currentRelay),
+            ...currentRelay.structuredMemory.carriedForward.slice(1),
+          ].filter(Boolean)}
         />
 
         <RelayPanel
           title="Unresolved"
           eyebrow="Needs closure"
           tone="amber"
-          items={caseData.structuredMemory.unresolvedItems}
+          items={currentRelay.structuredMemory.unresolvedItems}
         />
 
         <RelayPanel
           title="Escalation Logic"
           eyebrow="Thresholds to act"
           tone="coral"
-          items={caseData.structuredMemory.escalationTriggers}
+          items={currentRelay.structuredMemory.escalationTriggers}
         />
 
         <RelayPanel
           title="Follow-up Needed"
           eyebrow="Next shift actions"
           tone="teal"
-          items={caseData.structuredMemory.followUpNeeded}
+          items={currentRelay.structuredMemory.followUpNeeded}
           className="xl:col-span-2"
         />
       </div>
 
-      <Timeline events={caseData.timeline} />
+      <Timeline events={currentRelay.timeline} />
     </div>
   )
 }

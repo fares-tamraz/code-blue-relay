@@ -6,7 +6,17 @@ import { ArrowRight, AudioLines, CornerDownRight, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatClinicalTime, getStatusMeta, toneClassMap } from "@/lib/relay"
+import {
+  formatClinicalTime,
+  getRelayCarriedForwardNote,
+  getRelayDisplayLine,
+  getRelayDisplayName,
+  getRelaySignals,
+  getRelayStatusNote,
+  getRelayWhatChanged,
+  getStatusMeta,
+  toneClassMap,
+} from "@/lib/relay"
 import type { Case } from "@/types/relay"
 
 import { StatusBadge } from "./status-badge"
@@ -17,6 +27,9 @@ type CaseCardProps = {
 
 export function CaseCard({ caseData }: CaseCardProps) {
   const statusSurface = getStatusMeta(caseData.status)
+  const relaySignals = getRelaySignals(caseData)
+  const relayWhatChanged = getRelayWhatChanged(caseData)
+  const relayDisplayLine = getRelayDisplayLine(caseData)
 
   return (
     <motion.div
@@ -31,26 +44,28 @@ export function CaseCard({ caseData }: CaseCardProps) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[rgba(153,167,193,0.78)]">
-                {caseData.unit}
+                {caseData.unit || "Active Relay"}
               </p>
               <CardTitle className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">
-                {caseData.patientName}
+                {getRelayDisplayName(caseData)}
               </CardTitle>
-              <p className="mt-1 text-sm text-[rgba(186,198,223,0.74)]">
-                {caseData.diagnosis} • Room {caseData.room}
-              </p>
+              {relayDisplayLine ? (
+                <p className="mt-1 text-sm text-[rgba(186,198,223,0.74)]">
+                  {relayDisplayLine}
+                </p>
+              ) : null}
             </div>
             <StatusBadge status={caseData.status} />
           </div>
 
           <p className="text-sm leading-7 text-[rgba(213,221,235,0.82)]">
-            {caseData.statusNote}
+            {getRelayStatusNote(caseData)}
           </p>
         </CardHeader>
 
         <CardContent className="space-y-5 px-5 pb-5">
           <div className="grid gap-3 sm:grid-cols-3">
-            {caseData.liveSignals.map((signal) => (
+            {relaySignals.map((signal) => (
               <div
                 key={signal.label}
                 className={`rounded-2xl border px-3.5 py-3 ${toneClassMap[signal.tone]}`}
@@ -71,11 +86,11 @@ export function CaseCard({ caseData }: CaseCardProps) {
                 What changed since last shift
               </p>
               <p className="text-xs text-[rgba(186,198,223,0.65)]">
-                {formatClinicalTime(caseData.lastUpdated)}
+                {formatClinicalTime(caseData.updatedAt)}
               </p>
             </div>
             <ul className="space-y-2.5 text-sm leading-6 text-[rgba(220,228,243,0.86)]">
-              {caseData.whatChanged.slice(0, 2).map((item) => (
+              {relayWhatChanged.slice(0, 2).map((item) => (
                 <li key={item} className="flex gap-3">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[rgba(124,241,232,0.94)]" />
                   <span>{item}</span>
@@ -91,7 +106,7 @@ export function CaseCard({ caseData }: CaseCardProps) {
                 {caseData.carriedForwardLabel}
               </div>
               <p className="mt-3 text-sm leading-6 text-[rgba(229,223,255,0.88)]">
-                {caseData.carriedForwardNote}
+                {getRelayCarriedForwardNote(caseData)}
               </p>
             </div>
 
@@ -115,7 +130,7 @@ export function CaseCard({ caseData }: CaseCardProps) {
               size="lg"
               className="h-10 rounded-full bg-[linear-gradient(135deg,rgba(57,208,193,1),rgba(125,239,228,0.88))] px-4 text-[rgba(4,19,28,0.94)] hover:brightness-105"
             >
-              <Link href={`/case/${caseData.id}`}>
+              <Link href={`/case/${caseData.slug}`}>
                 Open Relay
                 <ArrowRight className="size-4" />
               </Link>
@@ -126,7 +141,7 @@ export function CaseCard({ caseData }: CaseCardProps) {
               size="lg"
               className="h-10 rounded-full border-white/12 bg-white/5 px-4 text-white hover:bg-white/8"
             >
-              <Link href={`/case/${caseData.id}#audio-summary`}>
+              <Link href={`/case/${caseData.slug}#audio-summary`}>
                 <AudioLines className="size-4" />
                 Play Summary
               </Link>
