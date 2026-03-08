@@ -90,8 +90,8 @@ export function CaseCard({ caseData }: CaseCardProps) {
               </p>
             </div>
             <ul className="space-y-2.5 text-sm leading-6 text-[rgba(220,228,243,0.86)]">
-              {relayWhatChanged.slice(0, 2).map((item) => (
-                <li key={item} className="flex gap-3">
+              {relayWhatChanged.slice(0, 2).map((item, index) => (
+                <li key={`${caseData.slug}-changed-${index}`} className="flex gap-3">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[rgba(124,241,232,0.94)]" />
                   <span>{item}</span>
                 </li>

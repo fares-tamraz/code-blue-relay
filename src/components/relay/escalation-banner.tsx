@@ -7,6 +7,7 @@ type EscalationBannerProps = {
   rule: {
     title: string
     condition: string
+    conditions?: string[]
     action: string
   }
   status: CaseStatus
@@ -44,9 +45,20 @@ export function EscalationBanner({
             <h3 className="text-xl font-semibold tracking-[-0.02em] text-white">
               {rule.title}
             </h3>
-            <p className="mt-2 text-sm leading-7 text-[rgba(225,231,243,0.88)]">
-              {rule.condition}
-            </p>
+            {rule.conditions && rule.conditions.length > 1 ? (
+              <ul className="mt-3 space-y-2.5 text-sm leading-7 text-[rgba(225,231,243,0.88)]">
+                {rule.conditions.map((condition, index) => (
+                  <li key={`${rule.title}-${index}`} className="flex gap-3">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-white/75" />
+                    <span>{condition}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-7 text-[rgba(225,231,243,0.88)]">
+                {rule.condition}
+              </p>
+            )}
           </div>
         </div>
         <div className="max-w-md rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">

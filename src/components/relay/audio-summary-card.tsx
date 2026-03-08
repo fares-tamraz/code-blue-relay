@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { AudioLines, Pause, Play, RadioTower } from "lucide-react"
 
@@ -26,6 +26,11 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
   const fallbackIntervalRef = useRef<number | null>(null)
   const audioSummary = relay.audioSummary
+  const audioIdentity = [
+    relay.slug,
+    audioSummary?.audioUrl ?? "no-audio",
+    audioSummary?.lastGeneratedAt ?? relay.updatedAt,
+  ].join(":")
 
   const durationLabel =
     audioSummary?.durationLabel ??
@@ -58,6 +63,24 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
     setIsPlaying(false)
   }
 
+  const resetPlayback = useEffectEvent(() => {
+    stopPlayback()
+    setPendingAutoplay(false)
+    setProgress(0)
+  })
+
+  const cleanupPlayback = useEffectEvent(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
+
+    clearFallbackInterval()
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel()
+    }
+  })
+
   useEffect(() => {
     if (!pendingAutoplay || !audioSummary?.audioUrl || !audioRef.current) {
       return
@@ -75,18 +98,20 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
   }, [audioSummary?.audioUrl, pendingAutoplay])
 
   useEffect(() => {
-    const audioElement = audioRef.current
+    resetPlayback()
+  }, [audioIdentity])
 
+  useEffect(() => {
+    if (audioSummary?.status !== "generating") {
+      return
+    }
+
+    resetPlayback()
+  }, [audioSummary?.status])
+
+  useEffect(() => {
     return () => {
-      if (audioElement) {
-        audioElement.pause()
-      }
-
-      clearFallbackInterval()
-
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel()
-      }
+      cleanupPlayback()
     }
   }, [])
 
@@ -145,6 +170,14 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
       return
     }
 
+    if (
+      audioSummary.status === "failed" ||
+      audioSummary.provider === "fallback"
+    ) {
+      startSpeechFallback()
+      return
+    }
+
     setIsRequestingAudio(true)
 
     try {
@@ -166,7 +199,14 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
       ? "Generating audio"
       : audioSummary?.provider === "elevenlabs"
         ? "ElevenLabs live"
-        : "Relay-specific fallback"
+        : audioSummary?.provider === "fallback"
+          ? "Relay-specific fallback"
+          : "Generates on first play"
+  const voiceLabel =
+    audioSummary?.voiceName ||
+    (audioSummary?.provider === "fallback"
+      ? "Relay-specific fallback voice"
+      : "Configured ElevenLabs voice")
 
   return (
     <div
@@ -196,7 +236,7 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-[rgba(186,198,223,0.72)]">
-            <span>{audioSummary?.voiceName || "Clinical Night Voice"}</span>
+            <span>{voiceLabel}</span>
             <span className="h-1 w-1 rounded-full bg-white/30" />
             <span>{durationLabel}</span>
             <span className="h-1 w-1 rounded-full bg-white/30" />
@@ -210,6 +250,14 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
               })}
             </span>
           </div>
+
+          {audioSummary?.fallbackReason || audioSummary?.errorMessage ? (
+            <p className="text-xs leading-6 text-[rgba(255,204,213,0.8)]">
+              {audioSummary.provider === "fallback"
+                ? `Fallback active for this relay${audioSummary.requestedVoiceId ? ` after voice ${audioSummary.requestedVoiceId} failed` : ""}.`
+                : audioSummary.errorMessage}
+            </p>
+          ) : null}
         </div>
 
         <div className="w-full max-w-md space-y-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
@@ -275,6 +323,7 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
 
       {audioSummary?.audioUrl ? (
         <audio
+          key={audioIdentity}
           ref={audioRef}
           src={audioSummary.audioUrl}
           onTimeUpdate={() => {

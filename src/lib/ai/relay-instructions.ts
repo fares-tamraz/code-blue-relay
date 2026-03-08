@@ -12,6 +12,13 @@ export const RELAY_RULES = [
   "Keep audioSummaryScript concise, natural, and playback-ready.",
   "Prefer empty arrays over invented content.",
   "Escalation triggers should be explicit and actionable.",
+  "Capture pending callbacks, pending responses, and waiting-on-clinician items in unresolvedItems when explicitly stated.",
+  "Capture monitoring instructions and explicit reassessment tasks in followUpNeeded when explicitly stated.",
+  "Extract escalation thresholds into escalationTriggers using the wording from the current handoff.",
+  "Do not output placeholder fragments or single-token honorific items such as Mr. or Mrs.",
+  "Do not repeat honorifics or patient titles in patientName, oneLineSummary, or list items.",
+  "Only populate carriedForward when the current handoff explicitly states prior-shift continuity.",
+  "Set visualSignals.memoryContinuity only from the current case's carried-forward or unresolved continuity context, and leave it empty when none is present.",
 ] as const
 
 export function buildRelaySystemPrompt() {

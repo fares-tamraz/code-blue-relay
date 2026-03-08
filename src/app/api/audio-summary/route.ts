@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 
-import { generateRelayAudioSummary } from "@/lib/elevenlabs"
+import {
+  generateRelayAudioSummary,
+  getConfiguredElevenLabsVoiceId,
+} from "@/lib/elevenlabs"
 
 export const runtime = "nodejs"
 
@@ -25,6 +28,7 @@ export async function POST(request: Request) {
   const audioSummary = await generateRelayAudioSummary({
     relayId: payload.relaySlug ?? payload.relayId ?? "relay-audio",
     script,
+    voiceId: getConfiguredElevenLabsVoiceId(),
   })
 
   return NextResponse.json({

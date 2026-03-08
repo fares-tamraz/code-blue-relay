@@ -1,10 +1,12 @@
 import type { RelayDraftInput } from "@/types/relay"
 
 import { generateStructuredMemoryWithBackboard, isBackboardConfigured } from "@/lib/backboard"
+import { finalizeRelayStatus } from "@/lib/relay"
 
 import { generateStructuredMemoryFallback } from "./fallback-structured-memory"
+import { repairStructuredMemory } from "./repair-structured-memory"
 import { buildRelaySystemPrompt, buildRelayUserPrompt } from "./relay-instructions"
-import { normalizeStructuredMemory, parseStructuredMemoryPayload } from "./relay-schema"
+import { parseStructuredMemoryPayload } from "./relay-schema"
 
 export async function generateStructuredMemory(input: RelayDraftInput) {
   const transcript = input.transcript.trim()
@@ -20,17 +22,55 @@ export async function generateStructuredMemory(input: RelayDraftInput) {
         userPrompt: buildRelayUserPrompt(transcript),
       })
 
-      const structuredMemory = normalizeStructuredMemory(
-        parseStructuredMemoryPayload(payload)
+      const structuredMemory = repairStructuredMemory(
+        parseStructuredMemoryPayload(payload),
+        { transcript }
       )
 
-      return structuredMemory.oneLineSummary || structuredMemory.patientName
-        ? structuredMemory
-        : generateStructuredMemoryFallback({ transcript })
+      const finalizedMemory =
+        structuredMemory.oneLineSummary || structuredMemory.patientName
+          ? structuredMemory
+          : repairStructuredMemory(generateStructuredMemoryFallback({ transcript }), {
+              transcript,
+            })
+
+      return {
+        ...finalizedMemory,
+        currentStatus: finalizeRelayStatus({
+          transcript,
+          structuredMemory: finalizedMemory,
+        }),
+      }
     } catch {
-      return generateStructuredMemoryFallback({ transcript })
+      const fallbackMemory = repairStructuredMemory(
+        generateStructuredMemoryFallback({ transcript }),
+        {
+          transcript,
+        }
+      )
+
+      return {
+        ...fallbackMemory,
+        currentStatus: finalizeRelayStatus({
+          transcript,
+          structuredMemory: fallbackMemory,
+        }),
+      }
     }
   }
 
-  return generateStructuredMemoryFallback({ transcript })
+  const fallbackMemory = repairStructuredMemory(
+    generateStructuredMemoryFallback({ transcript }),
+    {
+      transcript,
+    }
+  )
+
+  return {
+    ...fallbackMemory,
+    currentStatus: finalizeRelayStatus({
+      transcript,
+      structuredMemory: fallbackMemory,
+    }),
+  }
 }

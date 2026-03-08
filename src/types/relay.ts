@@ -34,9 +34,12 @@ export type RelayAudioSummary = {
   script: string
   provider?: "elevenlabs" | "fallback" | "pending"
   voiceName?: string
+  requestedVoiceId?: string
+  usedVoiceId?: string
   durationLabel?: string
   lastGeneratedAt?: string
   errorMessage?: string
+  fallbackReason?: string
 }
 
 export type Relay = {

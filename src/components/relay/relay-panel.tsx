@@ -43,9 +43,9 @@ export function RelayPanel({
       <CardContent className="px-5 pb-5">
         {items ? (
           <ul className="space-y-3">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <li
-                key={item}
+                key={`${title}-${index}`}
                 className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
               >
                 <span

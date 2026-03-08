@@ -43,11 +43,16 @@ type AudioSummaryResponse = {
   audioSummary: RelayAudioSummary
 }
 
+type PendingAudioRequest = {
+  script: string
+  promise: Promise<RelayAudioSummary | undefined>
+}
+
 export function RelayStoreProvider({ children }: { children: ReactNode }) {
   const [relays, setRelays] = useState<RelayRecord[]>(seededRelays)
   const relaysRef = useRef(relays)
   const audioRequestsRef = useRef<
-    Partial<Record<string, Promise<RelayAudioSummary | undefined>>>
+    Partial<Record<string, PendingAudioRequest>>
   >({})
 
   useEffect(() => {
@@ -80,12 +85,17 @@ export function RelayStoreProvider({ children }: { children: ReactNode }) {
       return undefined
     }
 
+    const requestScript = relay.audioSummary.script
+
     if (relay.audioSummary.audioUrl) {
       return relay.audioSummary
     }
 
-    if (audioRequestsRef.current[relay.slug]) {
-      return audioRequestsRef.current[relay.slug]
+    if (
+      audioRequestsRef.current[relay.slug] &&
+      audioRequestsRef.current[relay.slug]!.script === requestScript
+    ) {
+      return audioRequestsRef.current[relay.slug]!.promise
     }
 
     updateRelayAudio(relay.slug, (currentRelay) => ({
@@ -93,6 +103,7 @@ export function RelayStoreProvider({ children }: { children: ReactNode }) {
       status: "generating",
       provider: "pending",
       errorMessage: undefined,
+      fallbackReason: undefined,
       durationLabel:
         currentRelay.audioSummary?.durationLabel ??
         formatDurationLabelFromScript(currentRelay.audioSummary?.script ?? ""),
@@ -117,10 +128,14 @@ export function RelayStoreProvider({ children }: { children: ReactNode }) {
         const payload = (await response.json()) as AudioSummaryResponse
 
         updateRelayAudio(relay.slug, (currentRelay) => ({
-          ...currentRelay.audioSummary!,
-          ...payload.audioSummary,
-          script:
-            payload.audioSummary.script || currentRelay.audioSummary!.script,
+          ...(currentRelay.audioSummary?.script === requestScript
+            ? {
+                ...currentRelay.audioSummary!,
+                ...payload.audioSummary,
+                script:
+                  payload.audioSummary.script || currentRelay.audioSummary!.script,
+              }
+            : currentRelay.audioSummary!),
         }))
 
         return payload.audioSummary
@@ -130,21 +145,32 @@ export function RelayStoreProvider({ children }: { children: ReactNode }) {
           ...relay.audioSummary!,
           status: "failed",
           provider: "fallback",
+          voiceName: "Relay-specific fallback voice",
           errorMessage:
             error instanceof Error
               ? error.message
               : "Audio summary generation failed.",
+          fallbackReason: "audio_summary_request_failed",
         }
 
-        updateRelayAudio(relay.slug, () => fallbackSummary)
+        updateRelayAudio(relay.slug, (currentRelay) =>
+          currentRelay.audioSummary?.script === requestScript
+            ? fallbackSummary
+            : currentRelay.audioSummary!
+        )
 
         return fallbackSummary
       })
       .finally(() => {
-        delete audioRequestsRef.current[relay.slug]
+        if (audioRequestsRef.current[relay.slug]?.script === requestScript) {
+          delete audioRequestsRef.current[relay.slug]
+        }
       })
 
-    audioRequestsRef.current[relay.slug] = request
+    audioRequestsRef.current[relay.slug] = {
+      script: requestScript,
+      promise: request,
+    }
 
     return request
   }

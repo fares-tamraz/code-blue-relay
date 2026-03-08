@@ -36,10 +36,10 @@ type CaseDetailClientProps = {
 }
 
 export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
-  const { getRelayBySlug, escalateRelay } = useRelayStore()
+  const { relays, escalateRelay } = useRelayStore()
   const [isUpdating, setIsUpdating] = useState(false)
   const updateTimerRef = useRef<number | null>(null)
-  const relay = getRelayBySlug(relaySlug)
+  const relay = relays.find((entry) => entry.slug === relaySlug)
 
   useEffect(() => {
     return () => {
@@ -93,6 +93,18 @@ export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
   const relaySignals = getRelaySignals(currentRelay)
   const relayWhatChanged = getRelayWhatChanged(currentRelay)
   const escalationRule = getRelayEscalationRule(currentRelay)
+  const assessmentItems = [
+    currentRelay.structuredMemory.oneLineSummary,
+    currentRelay.structuredMemory.visualSignals
+      .clinicalMemoryResolvesInRealTime,
+    ...currentRelay.structuredMemory.unresolvedItems,
+  ].filter(Boolean)
+  const recommendationItems = Array.from(
+    new Set([
+      ...currentRelay.structuredMemory.followUpNeeded,
+      ...currentRelay.structuredMemory.escalationTriggers,
+    ])
+  ).filter(Boolean)
 
   return (
     <div className="space-y-6">
@@ -240,26 +252,15 @@ export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
         </RelayPanel>
 
         <RelayPanel
-          title="Structured Memory"
-          eyebrow="Persistent continuity layer"
-          tone="violet"
-          items={[
-            currentRelay.structuredMemory.oneLineSummary,
-            currentRelay.structuredMemory.visualSignals
-              .clinicalMemoryResolvesInRealTime,
-          ].filter(Boolean)}
-        />
-
-        <RelayPanel
-          title="What Changed"
-          eyebrow="Shift delta"
+          title="Situation"
+          eyebrow="SBAR"
           tone="teal"
           items={relayWhatChanged}
         />
 
         <RelayPanel
-          title="Carried Forward"
-          eyebrow="Carried forward from previous shift"
+          title="Background"
+          eyebrow="SBAR"
           tone="violet"
           items={[
             getRelayCarriedForwardNote(currentRelay),
@@ -268,24 +269,17 @@ export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
         />
 
         <RelayPanel
-          title="Unresolved"
-          eyebrow="Needs closure"
+          title="Assessment"
+          eyebrow="SBAR"
           tone="amber"
-          items={currentRelay.structuredMemory.unresolvedItems}
+          items={assessmentItems}
         />
 
         <RelayPanel
-          title="Escalation Logic"
-          eyebrow="Thresholds to act"
+          title="Recommendation"
+          eyebrow="SBAR"
           tone="coral"
-          items={currentRelay.structuredMemory.escalationTriggers}
-        />
-
-        <RelayPanel
-          title="Follow-up Needed"
-          eyebrow="Next shift actions"
-          tone="teal"
-          items={currentRelay.structuredMemory.followUpNeeded}
+          items={recommendationItems}
           className="xl:col-span-2"
         />
       </div>

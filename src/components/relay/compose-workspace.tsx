@@ -21,9 +21,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { composeSeedTranscript } from "@/data/demo-cases"
+import {
+  defaultDemoTranscriptPreset,
+  demoTranscriptPresets,
+} from "@/data/demo-transcripts"
 import { createEmptyStructuredMemory } from "@/lib/ai/relay-schema"
-import { createRelayDraftInput } from "@/lib/relay"
+import { createRelayDraftInput, deriveMemoryContinuitySignal } from "@/lib/relay"
 import type { StructuredMemory } from "@/types/relay"
 
 import { EmptyState } from "./empty-state"
@@ -33,45 +36,42 @@ import { useRelayStore } from "./relay-store-provider"
 const emptyStructuredMemory = createEmptyStructuredMemory()
 
 const extractionSections: Array<{
-  key: keyof Pick<
-    StructuredMemory,
-    "newFindings" | "carriedForward" | "unresolvedItems" | "escalationTriggers" | "followUpNeeded"
-  >
   title: string
   accent: string
+  getItems: (memory: StructuredMemory) => string[]
 }> = [
   {
-    key: "newFindings",
-    title: "New findings",
+    title: "Situation",
     accent: "bg-[rgba(45,211,191,0.9)]",
+    getItems: (memory) => memory.newFindings,
   },
   {
-    key: "carriedForward",
-    title: "Carried forward from previous shift",
+    title: "Background",
     accent: "bg-[rgba(167,139,250,0.9)]",
+    getItems: (memory) => memory.carriedForward,
   },
   {
-    key: "unresolvedItems",
-    title: "Unresolved items",
+    title: "Assessment",
     accent: "bg-[rgba(245,158,11,0.9)]",
+    getItems: (memory) => memory.unresolvedItems,
   },
   {
-    key: "escalationTriggers",
-    title: "Escalation triggers",
+    title: "Recommendation",
     accent: "bg-[rgba(251,113,133,0.9)]",
-  },
-  {
-    key: "followUpNeeded",
-    title: "Follow-up needed",
-    accent: "bg-[rgba(45,211,191,0.9)]",
+    getItems: (memory) =>
+      Array.from(
+        new Set([...memory.followUpNeeded, ...memory.escalationTriggers])
+      ),
   },
 ]
 
 export function ComposeWorkspace() {
   const router = useRouter()
   const { createRelay } = useRelayStore()
-  const [transcript, setTranscript] = useState(composeSeedTranscript)
-  const [handoffMode, setHandoffMode] = useState<"voice" | "typed">("typed")
+  const [transcript, setTranscript] = useState(defaultDemoTranscriptPreset.transcript)
+  const [handoffMode, setHandoffMode] = useState<"voice" | "typed">(
+    defaultDemoTranscriptPreset.handoffMode
+  )
   const [structuredMemory, setStructuredMemory] =
     useState<StructuredMemory | null>(null)
   const [isGeneratingStructuredMemory, setIsGeneratingStructuredMemory] =
@@ -181,7 +181,16 @@ export function ComposeWorkspace() {
 
   const wordCount = deferredTranscript.trim().split(/\s+/).filter(Boolean).length
   const generatedVisualSignals = structuredMemory?.visualSignals ?? emptyStructuredMemory.visualSignals
+  const generatedMemoryContinuity = structuredMemory
+    ? deriveMemoryContinuitySignal({
+        transcript,
+        structuredMemory,
+      })
+    : ""
   const canCreateRelay = Boolean(structuredMemory) && !isGeneratingStructuredMemory
+  const selectedPresetId =
+    demoTranscriptPresets.find((preset) => preset.transcript === transcript)?.id ??
+    null
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -241,6 +250,44 @@ export function ComposeWorkspace() {
           </div>
         </CardHeader>
         <CardContent className="space-y-5 px-6 pb-6">
+          <div className="rounded-[22px] border border-white/8 bg-[rgba(255,255,255,0.03)] px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgba(153,167,193,0.74)]">
+                  Demo transcript presets
+                </p>
+                <p className="mt-2 text-sm text-white/82">
+                  Quick-load QA handoffs. Each preset still runs through the same
+                  generation and repair pipeline.
+                </p>
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white/76">
+                HACK CANADA demo prep
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              {demoTranscriptPresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    applyTranscriptUpdate(preset.transcript, preset.handoffMode)
+                  }}
+                  className={`rounded-full border px-3 py-2 text-left text-xs font-medium tracking-[0.14em] transition hover:bg-white/8 ${
+                    selectedPresetId === preset.id
+                      ? "border-[rgba(45,211,191,0.24)] bg-[rgba(17,56,64,0.32)] text-[rgba(163,252,239,0.96)]"
+                      : "border-white/10 bg-white/5 text-white/78"
+                  }`}
+                >
+                  <span className="block uppercase">{preset.label}</span>
+                  <span className="mt-1 block tracking-normal text-[11px] opacity-72">
+                    {preset.context}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Textarea
             value={transcript}
             onChange={(event) => {
@@ -286,7 +333,7 @@ export function ComposeWorkspace() {
                 Memory continuity
               </p>
               <p className="mt-2 text-sm text-white/88">
-                {generatedVisualSignals.memoryContinuity ||
+                {generatedMemoryContinuity ||
                   "Remains empty unless the current handoff explicitly includes carried-forward context."}
               </p>
             </div>
@@ -409,7 +456,7 @@ export function ComposeWorkspace() {
               </div>
 
               {extractionSections.map((section) => {
-                const items = structuredMemory[section.key]
+                const items = section.getItems(structuredMemory)
 
                 return (
                   <motion.div
@@ -428,8 +475,11 @@ export function ComposeWorkspace() {
                     </div>
                     {items.length ? (
                       <ul className="space-y-2.5 text-sm leading-6 text-[rgba(212,221,237,0.84)]">
-                        {items.map((item) => (
-                          <li key={item} className="flex gap-3">
+                        {items.map((item, index) => (
+                          <li
+                            key={`${section.title}-${index}`}
+                            className="flex gap-3"
+                          >
                             <span className="mt-2 h-1.5 w-1.5 rounded-full bg-white/75" />
                             <span>{item}</span>
                           </li>
