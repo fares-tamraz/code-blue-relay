@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Code Blue Relay
 
-## Getting Started
+Code Blue Relay is a demo-ready, voice-first clinical handoff MVP built as a single-repo Next.js app.
 
-First, run the development server:
+It turns spoken or typed shift handoff into persistent case memory so the next shift can immediately see:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- what changed since the last shift
+- what was carried forward from previous shift
+- what remains unresolved
+- what requires escalation
+
+The demo centers on a high-risk overnight case for Mrs. Elina Moreau and is designed to present cleanly in under 90 seconds.
+
+## Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS v4
+- shadcn/ui
+- Framer Motion
+- lucide-react
+- Supabase client scaffold
+- ElevenLabs adapter scaffold
+- Backboard adapter scaffold
+
+## Routes
+
+- `/`
+  Landing page with cinematic hero, animated memory strands, workflow, and product framing.
+- `/dashboard`
+  Active caseboard with four demo cases and quick actions.
+- `/compose`
+  Handoff composer showing transcript-to-structured-memory transformation.
+- `/case/elina-moreau`
+  Full relay detail with audio summary, timeline, carried-forward context, and urgent escalation simulation.
+
+## Demo Flow
+
+1. Open `/`.
+2. Click `Watch 30s Handoff` to jump into the Elina Moreau relay summary.
+3. Click `Back to Dashboard` and scan the live caseboard.
+4. Open `/compose` to show how the transcript becomes structured memory.
+5. Return to `/case/elina-moreau` and press `Simulate urgent update` to flip the case from `Watch` to `Escalate`.
+
+## Mocked Integrations
+
+- Supabase:
+  `src/lib/supabase.ts` is scaffolded, but the UI runs entirely from local demo data by default.
+- ElevenLabs:
+  `src/lib/elevenlabs.ts` safely falls back to a mock audio-ready state if env vars are missing or the request fails.
+- Backboard:
+  `src/lib/backboard.ts` is isolated behind an adapter and defaults to a local mock memory service.
+
+## Environment
+
+Copy `.env.example` to `.env.local` if you want to wire optional integrations.
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=
+BACKBOARD_API_KEY=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Leaving these blank keeps the MVP in safe mock mode.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Run Locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Then open `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Verification
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```
