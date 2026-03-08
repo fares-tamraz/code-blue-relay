@@ -21,7 +21,7 @@ export const demoTranscriptPresets: DemoTranscriptPreset[] = [
     context: "Stable | no carry-forward continuity",
     handoffMode: "typed",
     transcript:
-      "Devon Lee is stable after knee replacement. Pain is controlled on oral meds and he walked twice with one assist. Recheck nausea after midnight. Escalate if pain breaks through the current regimen.",
+      "Devon Lee is stable after knee replacement. Pain is controlled on oral meds and he walked twice with one assist. Recheck nausea after midnight. If pain breaks through the current regimen, escalate.",
   },
   {
     id: "maya-garcia-sepsis-escalate",
@@ -37,7 +37,7 @@ export const demoTranscriptPresets: DemoTranscriptPreset[] = [
     context: "Watch | fluid balance continuity",
     handoffMode: "typed",
     transcript:
-      "Owen Brooks is on watch for heart failure recovery. Oxygen is down to 2 liters and edema is a little softer after diuresis. Day shift needs the fluid balance trend carried forward into morning rounds, including the overnight output total and morning weight. Escalate if oxygen demand rises or work of breathing increases.",
+      "Owen Brooks is on watch for heart failure recovery. Oxygen is down to 2 liters and edema is a little softer after diuresis. Day shift needs the fluid balance trend carried forward into morning rounds, including the overnight output total and morning weight. If oxygen demand rises or work of breathing increases, escalate.",
   },
 ]
 

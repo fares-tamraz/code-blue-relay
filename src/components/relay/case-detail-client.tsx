@@ -35,6 +35,21 @@ type CaseDetailClientProps = {
   relaySlug: string
 }
 
+function dedupeDisplayItems(items: string[]) {
+  const seen = new Set<string>()
+
+  return items.filter((item) => {
+    const normalized = item.toLowerCase().replace(/[^a-z0-9]/g, "")
+
+    if (!normalized || seen.has(normalized)) {
+      return false
+    }
+
+    seen.add(normalized)
+    return true
+  })
+}
+
 export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
   const { relays, escalateRelay } = useRelayStore()
   const [isUpdating, setIsUpdating] = useState(false)
@@ -93,18 +108,20 @@ export function CaseDetailClient({ relaySlug }: CaseDetailClientProps) {
   const relaySignals = getRelaySignals(currentRelay)
   const relayWhatChanged = getRelayWhatChanged(currentRelay)
   const escalationRule = getRelayEscalationRule(currentRelay)
-  const assessmentItems = [
-    currentRelay.structuredMemory.oneLineSummary,
-    currentRelay.structuredMemory.visualSignals
-      .clinicalMemoryResolvesInRealTime,
-    ...currentRelay.structuredMemory.unresolvedItems,
-  ].filter(Boolean)
-  const recommendationItems = Array.from(
-    new Set([
+  const assessmentItems = dedupeDisplayItems(
+    [
+      currentRelay.structuredMemory.oneLineSummary,
+      currentRelay.structuredMemory.visualSignals
+        .clinicalMemoryResolvesInRealTime,
+      ...currentRelay.structuredMemory.unresolvedItems,
+    ].filter(Boolean)
+  )
+  const recommendationItems = dedupeDisplayItems(
+    [
       ...currentRelay.structuredMemory.followUpNeeded,
       ...currentRelay.structuredMemory.escalationTriggers,
-    ])
-  ).filter(Boolean)
+    ].filter(Boolean)
+  )
 
   return (
     <div className="space-y-6">

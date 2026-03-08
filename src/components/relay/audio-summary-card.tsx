@@ -200,13 +200,16 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
       : audioSummary?.provider === "elevenlabs"
         ? "ElevenLabs live"
         : audioSummary?.provider === "fallback"
-          ? "Relay-specific fallback"
+          ? "Voice summary ready"
           : "Generates on first play"
   const voiceLabel =
-    audioSummary?.voiceName ||
-    (audioSummary?.provider === "fallback"
-      ? "Relay-specific fallback voice"
-      : "Configured ElevenLabs voice")
+    audioSummary?.provider === "fallback"
+      ? "Voice summary playback"
+      : audioSummary?.voiceName || "Configured ElevenLabs voice"
+  const statusMessage =
+    audioSummary?.provider === "fallback"
+      ? ""
+      : audioSummary?.errorMessage || ""
 
   return (
     <div
@@ -251,11 +254,9 @@ export function AudioSummaryCard({ relay }: AudioSummaryCardProps) {
             </span>
           </div>
 
-          {audioSummary?.fallbackReason || audioSummary?.errorMessage ? (
+          {statusMessage ? (
             <p className="text-xs leading-6 text-[rgba(255,204,213,0.8)]">
-              {audioSummary.provider === "fallback"
-                ? `Fallback active for this relay${audioSummary.requestedVoiceId ? ` after voice ${audioSummary.requestedVoiceId} failed` : ""}.`
-                : audioSummary.errorMessage}
+              {statusMessage}
             </p>
           ) : null}
         </div>
