@@ -1,83 +1,56 @@
 # Code Blue Relay
 
-Code Blue Relay is a demo-ready, voice-first clinical handoff MVP built as a single-repo Next.js app.
+**Live Demo:** https://code-blue-relay.vercel.app/  
+**Featured Case:** https://code-blue-relay.vercel.app/case/elina-moreau
 
-It turns spoken or typed shift handoff into persistent case memory so the next shift can immediately see:
+![Code Blue Relay landing page](public/readme-landing-page.png)
 
-- what changed since the last shift
-- what was carried forward from previous shift
-- what remains unresolved
-- what requires escalation
+Code Blue Relay is a voice-first clinical handoff experience that turns spoken shift report into persistent case memory. It preserves the nuance that is usually lost during shift change and converts it into a clear continuity layer for the next clinician.
 
-The demo centers on a high-risk overnight case for Mrs. Elina Moreau and is designed to present cleanly in under 90 seconds.
+## Overview
 
-## Stack
+Clinical handoff is often rich in context but fragile in practice. Subtle details such as worsening confusion, a new wet cough after medication, or an unanswered physician callback can live only in speech. Code Blue Relay captures those signals, structures them, and carries them forward so the incoming shift inherits context instead of reconstructing it.
+
+## What This Project Delivers
+
+- Spoken or typed handoff captured as a relay
+- Structured clinical memory extracted from the raw narrative
+- Carried-forward unresolved concerns from previous shifts
+- Persistent escalation logic tied to the patient story
+- Voice-ready summaries for rapid pre-room review
+- A polished end-to-end experience from landing page to live case detail
+
+## Product Experience
+
+The experience is designed to communicate the value of continuity of care quickly and clearly:
+
+- **Landing page:** frames the problem and introduces the live case
+- **Dashboard:** surfaces active cases by status and urgency
+- **Compose workspace:** shows how a raw handoff becomes structured memory
+- **Case detail view:** combines transcript, memory, follow-up, escalation triggers, and audio summary in a single continuity layer
+
+## Featured Scenario
+
+The primary scenario follows **Mrs. Elina Moreau**, a 78-year-old neuro stepdown patient on overnight watch. Her case includes worsening confusion, poor intake, a new wet cough after medications, and a pending physician callback. This scenario demonstrates why spoken nuance matters and how Code Blue Relay turns that nuance into actionable continuity.
+
+## Why It Matters
+
+- Continuity of care improves when the next shift receives context instead of fragments
+- Escalation thresholds are safer when they are persisted instead of remembered
+- Voice preserves nuance that checklist-only handoff often loses
+- The product makes risk visible before the next clinician steps into the room
+
+## Technical Execution
+
+Code Blue Relay is built with a modern frontend stack focused on clarity, responsiveness, and demo reliability:
 
 - Next.js App Router
 - TypeScript
-- Tailwind CSS v4
+- Tailwind CSS
 - shadcn/ui
 - Framer Motion
-- lucide-react
-- Supabase client scaffold
-- ElevenLabs adapter scaffold
-- Backboard adapter scaffold
+- Adapter-based integrations for clinical memory, speech, and data services
 
-## Routes
+## Project Goal
 
-- `/`
-  Landing page with cinematic hero, animated memory strands, workflow, and product framing.
-- `/dashboard`
-  Active caseboard with four demo cases and quick actions.
-- `/compose`
-  Handoff composer showing transcript-to-structured-memory transformation.
-- `/case/elina-moreau`
-  Full relay detail with audio summary, timeline, carried-forward context, and urgent escalation simulation.
-
-## Demo Flow
-
-1. Open `/`.
-2. Click `Watch 30s Handoff` to jump into the Elina Moreau relay summary.
-3. Click `Back to Dashboard` and scan the live caseboard.
-4. Open `/compose` to show how the transcript becomes structured memory.
-5. Return to `/case/elina-moreau` and press `Simulate urgent update` to flip the case from `Watch` to `Escalate`.
-
-## Mocked Integrations
-
-- Supabase:
-  `src/lib/supabase.ts` is scaffolded, but the UI runs entirely from local demo data by default.
-- ElevenLabs:
-  `src/lib/elevenlabs.ts` safely falls back to a mock audio-ready state if env vars are missing or the request fails.
-- Backboard:
-  `src/lib/backboard.ts` is isolated behind an adapter and defaults to a local mock memory service.
-
-## Environment
-
-Copy `.env.example` to `.env.local` if you want to wire optional integrations.
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-ELEVENLABS_API_KEY=
-ELEVENLABS_VOICE_ID=
-BACKBOARD_API_KEY=
-```
-
-Leaving these blank keeps the MVP in safe mock mode.
-
-## Run Locally
-
-```bash
-npm install
-npm run dev
-```
-
-Then open `http://localhost:3000`.
-
-## Verification
-
-```bash
-npm run lint
-npm run build
-```
+This project explores a simple but high-impact idea: shift handoff should preserve clinical memory, not just transmit notes. Code Blue Relay shows how spoken narrative can become durable context, faster review, and more confident escalation decisions.
